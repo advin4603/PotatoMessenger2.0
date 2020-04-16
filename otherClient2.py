@@ -42,6 +42,7 @@ timeOut = 60  # in Seconds
 
 
 def handleServer(server: socket.socket):
+    """Thread to Send Handle Server. Sending Requests,quit msgs,and receive and send requests"""
     global myMsg
     global sendThis
     global status
@@ -165,7 +166,8 @@ def handleClient():
             print('\n' * 2)
             if specificView:
                 viewPrinter(specificView, alias)
-            Fm.prYellow('Wow, Such empty.'.center(100, ' '))
+            else:
+                Fm.prYellow('Wow, Such empty.'.center(100, ' '))
         elif user.lower() == 's':
             print('\n' * 2)
             Fm.prPurple('Enter Recipient 1(Enter * to send msg to everyone using Potato Messenger)\n>', end='')
