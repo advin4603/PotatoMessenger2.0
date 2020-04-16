@@ -1,0 +1,20 @@
+Server Side:
+    ON CONNECTION
+        1)Receive 16 byte fixed length header giving size of alias msg.
+        2)Prepare to receive all bytes one at a time.
+        3)Receive the alias.
+        4)Receive request from client
+        5)If request is 'r':
+            5.1)Create client's view of all msg.
+            5.2)Convert the view to JSON
+            5.3)Send size of JSON as Bytes in a fixed length header of 64 bytes.
+            5.4)Send JSON View in bytes
+        6)If request is 's':
+            6.1)Receive 64 byte fixed length header giving size of msg JSON.
+            6.2)Prepare to receive all bytes one at a time.
+            6.2)Receive the msg JSON.
+            6.3)Update the global msg Dict and send 'S' for success if valid else 'F' for Fail.
+        7)If request is 'q':
+            7.1)Close connection
+        8)Else:
+            8.1)If no msg received for 30 sec then close connection.
