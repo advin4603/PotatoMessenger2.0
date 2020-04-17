@@ -27,19 +27,18 @@ sendThis: List[Dict[Tuple[str, str, str], Tuple[str, bool]]] = []
 # value tuple consists of msg and bool for if it is read.
 myMsg: Dict[Tuple[str, str, str], Tuple[str, bool]] = {}
 done = False
-status: List[str] = []
+status: List[bool] = []
 # Change these sizes if using other encoding.
 hdrStrLen = 64
 hdrbyteSize = 64
 
-myIP = socket.gethostbyname(socket.gethostname())
+ServerIP = socket.gethostbyname(socket.gethostname())
 port = 1234
 queueLength = 5
 enc = 'utf-8'
 bufferSize = 64
 uniChrSz = 1
 timeOut = 60  # in Seconds
-
 
 def handleServer(server: socket.socket):
     """Thread to Send Handle Server. Sending Requests,quit msgs,and receive and send requests"""
@@ -49,17 +48,26 @@ def handleServer(server: socket.socket):
     global done
     try:
         while not done:
+            # Check if user wants to send something by checking sendThis list.
             if sendThis:
+                # Send 's' request to server
                 req = 's'.encode(enc)
                 server.send(req)
+
+                # pop the msg from sendThis then dump it into a JSON Format.
                 a = sendThis.pop(-1)
                 sendMsg = Fm.dumper(a).encode(enc)
+
+                # Send size of coming msg then send the msg
                 sz = len(sendMsg)
                 header = str(sz).ljust(hdrStrLen).encode(enc)
                 server.send(header)
                 server.send(sendMsg)
+
+                # Receive whether message sent Successfully or not
                 st = server.recv(uniChrSz).decode(enc)
-                status.append(st)
+                state = True if st == 'S' else False
+                status.append(state)
             else:
                 req = 'r'.encode(enc)
                 server.send(req)

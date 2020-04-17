@@ -16,5 +16,16 @@ Server Side:
             6.3)Update the global msg Dict and send 'S' for success if valid else 'F' for Fail.
         7)If request is 'q':
             7.1)Close connection
-        8)Else:
-            8.1)If no msg received for 30 sec then close connection.
+        8)If request is 'u':
+            8.1)Receive 64 byte fixed length header giving size of fileName.
+            8.2)Receive fileName byte-by-byte.
+            8.3)Receive 64 byte fixed length header giving size of file.
+            8.4)Create a file under dir with name that of the alias and the filename as provided.
+            8.5)Receive fileChunk byte by byte and write it in file.
+            8.6)Add new FilePath to driveInf dict as key and set value as a list containing user alias only and a string containing ctime().
+        9)If request is 'd':
+            9.1)Create list of all filePaths(Relative) that the user has access to.
+            9.2)Send Size of that list in JSON Bytes in bytes as a 64byte header.
+            9.2)Send the list.
+        10)Else:
+            10.1)If no msg received for 30 sec then close connection.

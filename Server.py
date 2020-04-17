@@ -1,10 +1,14 @@
 import socket
 import sys
+import os
 from time import ctime, mktime, strptime, time
 import Formatting as Fm
 from typing import Dict, Tuple, List
 import threading
 from platform import system
+from copy import deepcopy
+from pathlib import Path
+import json
 
 # This if statement is for enabling colored statements in terminal and python console.
 if "win" in system().lower():  # works for Win7, 8, 10 ...
@@ -32,6 +36,14 @@ msg: Dict[Tuple[str, str, str], Tuple[str, bool]] = {
     ('admin', '*', 'Sat Apr 11 22:10:30 2020'): ('Welcome to Potato Messenger', True),
     ('Potato', 'Tomato', 'Sat Apr 11 22:10:30 2020'): ('How you doin\'?', False)
 }
+
+# Drive Info Dictionary.
+# * implies all have access.
+# Key is a path to a specific file in drive
+# Value is a tuple of authorized users and time last modified.
+driveInf: Dict[Path, Tuple[List[str], str]] = {
+    Path('Drive/admin/Welcome.txt'): (['*'], 'Fri Apr 17 22:16:37 2020')
+}
 sOpen = False
 
 
@@ -51,6 +63,14 @@ def updateTypeChecker(updateDict: Dict):
         if not isinstance(value[1], bool):
             return False
     return True
+
+
+def getClientFiles(al: str):
+    clFiles: List[str] = []
+    for key in driveInf:
+        if al in driveInf[key][0] or '*' in driveInf[key][0]:
+            clFiles.append(str(key))
+    return clFiles
 
 
 def updateValidityChecker(updateDict: Dict[Tuple[str, str, str], Tuple[str, bool]],
@@ -85,9 +105,18 @@ def getClientView(alias: str):
     return view
 
 
+def setRead(al):
+    global msg
+    copyMsg = deepcopy(msg)
+    for key in copyMsg:
+        if key[1] == al:
+            msg[key] = msg[key][0], True
+
+
 def handleConnection(client: socket.socket, address):
     global msg
     global sOpen
+    global driveInf
     # get alias header.
     try:
         aliasSize = int(client.recv(hdrbyteSize).decode(enc).strip())
@@ -104,6 +133,7 @@ def handleConnection(client: socket.socket, address):
             req = client.recv(uniChrSz).decode(enc)
             if req == 'r':
                 lastActive = time()
+                setRead(alias)
                 clView = getClientView(alias)
                 clViewJson = Fm.dumper(clView)
                 mainResp = clViewJson.encode(enc)
@@ -133,6 +163,29 @@ def handleConnection(client: socket.socket, address):
                     msgRcv = [i[1] if i[1] != '*' else 'Everyone' for i in newData]
                     Fm.prCyan(
                         f'{lgSt()} {alias} sent {"a message" if len(msgRcv) == 1 else "messages"} to {", ".join(msgRcv[:-1])}{", and " if msgRcv[:-1] else ""}{msgRcv[-1]}.')
+            elif req == 'u':
+                lastActive = time()
+                sze = int(client.recv(hdrbyteSize).decode(enc).strip())
+                fileName = ''
+                for _ in range(sze):
+                    fileName += client.recv(1).decode(enc)
+                if not os.path.exists(str(Path('Drive', 'admin'))):
+                    os.makedirs(str(Path('Drive', 'admin')))
+                fileSze = int(client.recv(hdrbyteSize).decode(enc).strip())
+                filePath = Path('Drive', alias, fileName)
+                with open(str(filePath), 'wb') as File:
+                    for _ in range(fileSze):
+                        File.write(client.recv(1))
+                driveInf[filePath] = ([alias], ctime())
+                Fm.prCyan(f'{lgSt()} {alias} uploaded {str(filePath.name)} to {str(filePath.stem)}.')
+
+            elif req == 'd':
+                lastActive = time()
+                clFiles = json.dumps(getClientFiles(alias))
+                clFileByte = clFiles.encode(enc)
+                clFileSz = str(len(clFileByte)).ljust(hdrStrLen, ' ').encode(enc)
+                client.send(clFileSz)
+                client.send(clFileByte)
             elif req == 'q':
                 lastActive = time()
                 client.close()
