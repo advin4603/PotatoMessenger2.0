@@ -27,6 +27,7 @@ enc = 'utf-8'
 bufferSize = 64
 uniChrSz = 1
 timeOut = 60  # in Seconds
+readBufferSize = 1024*4
 
 # Message Dictionary
 # * implies msg to all
@@ -65,7 +66,18 @@ def updateTypeChecker(updateDict: Dict):
     return True
 
 
-def getClientFiles(al: str):
+def letUpdateTypeCheck(up: object) -> bool:
+    if not isinstance(up, dict):
+        return False
+    for key, value in up.items():
+        if not isinstance(key, str):
+            return False
+        if not isinstance(value, str):
+            return False
+    return True
+
+
+def getClientFiles(al: str) -> List[str]:
     clFiles: List[str] = []
     for key in driveInf:
         if al in driveInf[key][0] or '*' in driveInf[key][0]:
@@ -178,7 +190,6 @@ def handleConnection(client: socket.socket, address):
                         File.write(client.recv(1))
                 driveInf[filePath] = ([alias], ctime())
                 Fm.prCyan(f'{lgSt()} {alias} uploaded {str(filePath.name)} to {str(filePath.stem)}.')
-
             elif req == 'd':
                 lastActive = time()
                 clFiles = json.dumps(getClientFiles(alias))
@@ -186,6 +197,43 @@ def handleConnection(client: socket.socket, address):
                 clFileSz = str(len(clFileByte)).ljust(hdrStrLen, ' ').encode(enc)
                 client.send(clFileSz)
                 client.send(clFileByte)
+            elif req == 'l':
+                lastActive = time()
+                sz = int(client.recv(hdrbyteSize).decode(enc).strip())
+                upDictJSON = ''
+                for _ in range(sz):
+                    upDictJSON += client.recv(1).decode(enc)
+                upDict = json.loads(upDictJSON)
+                if letUpdateTypeCheck(upDictJSON):
+                    for f in upDict:
+                        driveInf[f][0].append(upDict[f])
+                    client.send('S'.encode(enc))
+                else:
+                    client.send('F'.encode(enc))
+            elif req == 'g':
+                lastActive = time()
+                pthSz = int(client.recv(hdrbyteSize).decode(enc).strip())
+                filePath = ''
+                for _ in range(pthSz):
+                    filePath += client.recv(1).decode(enc)
+                if filePath in getClientFiles(alias):
+                    client.send('S'.encode(enc))
+                    fPath = Path(filePath)
+                    if fPath.exists():
+                        client.send('T'.encode(enc))
+                        fileSize = fPath.stat().st_size
+                        fileSizeHdr = str(fileSize).ljust(hdrStrLen).encode(enc)
+                        client.send(fileSizeHdr)
+                        with open(filePath,'rb') as driveFile:
+                            byte = driveFile.read(readBufferSize)
+                            client.send(byte)
+                            while byte:
+                                byte = driveFile.read(readBufferSize)
+                                client.send(byte)
+                    else:
+                        client.send('N'.encode(enc))
+                else:
+                    client.send('F'.encode(enc))
             elif req == 'q':
                 lastActive = time()
                 client.close()

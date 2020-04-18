@@ -27,5 +27,17 @@ Server Side:
             9.1)Create list of all filePaths(Relative) that the user has access to.
             9.2)Send Size of that list in JSON Bytes in bytes as a 64byte header.
             9.2)Send the list.
-        10)Else:
-            10.1)If no msg received for 30 sec then close connection.
+        10)If request is 'l':
+            10.1)Receive 64 byte header giving size of coming update.
+            10.2)Prepare to receive the update dict.
+            10.3)Receive the update dict.
+            10.4)If valid update the dictionary, then sending S for success else F.
+        11)If request is 'g':
+            11.1)Receive a 64 byte header giving size of filePath.
+            11.2)Receive the filePath.
+            11.3)If user has access send 'S' else 'F'.
+            11.4)If file exists send 'T' else 'N'.
+            11.4)If 'T' and 'S' then send the fileSize in Bytes as 64Byte Fixed Length header.
+            11.5)Send the file byte by byte.
+        12)Else:
+            12.1)If no msg received for 30 sec then close connection.
