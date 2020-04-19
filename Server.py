@@ -27,7 +27,8 @@ enc = 'utf-8'
 bufferSize = 64
 uniChrSz = 1
 timeOut = 60  # in Seconds
-readBufferSize = 1024 * 128
+readChunkSize = 1024 * 128
+writeChunkSize = 1024 * 128
 
 # Message Dictionary
 # * implies msg to all
@@ -188,9 +189,13 @@ def handleConnection(client: socket.socket, address):
                 fileSze = int(client.recv(hdrbyteSize).decode(enc).strip())
                 filePath = Path('Drive', alias, fileName)
                 with open(str(filePath), 'wb') as File:
-                    for _ in range(fileSze):
-                        File.write(client.recv(1))
+                    cnt = 0
+                    while cnt < fileSze:
+                        chunk = client.recv(writeChunkSize)
+                        File.write(chunk)
+                        cnt += len(chunk)
                 driveInf[filePath] = ([alias], ctime())
+                client.send('S'.encode(enc))
                 Fm.prCyan(f'{lgSt()} {alias} uploaded {str(filePath.name)} to {str(filePath.stem)}.')
             elif req == 'd':
                 lastActive = time()
@@ -227,10 +232,10 @@ def handleConnection(client: socket.socket, address):
                         fileSizeHdr = str(fileSize).ljust(hdrStrLen).encode(enc)
                         client.send(fileSizeHdr)
                         with open(filePath, 'rb') as driveFile:
-                            byte = driveFile.read(readBufferSize)
+                            byte = driveFile.read(readChunkSize)
                             client.send(byte)
                             while byte:
-                                byte = driveFile.read(readBufferSize)
+                                byte = driveFile.read(readChunkSize)
                                 client.send(byte)
                         user = client.recv(uniChrSz).decode()
                         Fm.prCyan(f'{lgSt()} {alias} downloaded {filePath}')

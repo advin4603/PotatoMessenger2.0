@@ -29,6 +29,8 @@ getDriveInf: bool = False
 DriveInf: List[str] = []
 downloadThis: List[str] = []
 downloading: bool = True
+uploadThis: List[Path] = []
+uploading: bool = False
 posResp = ['yes', 'y', 'yeah', 'yup']
 negResp = ['no', 'n', 'nope', 'nah']
 # Message Dictionary
@@ -42,6 +44,7 @@ status: List[bool] = []
 hdrStrLen = 64
 hdrbyteSize = 64
 writeChunkSize = 1024 * 128
+readChunkSize = 1024 * 128
 
 ServerIP = socket.gethostbyname(socket.gethostname())
 port = 1234
@@ -76,6 +79,8 @@ def handleServer(server: socket.socket):
     global DriveInf
     global downloading
     global downloadThis
+    global uploading
+    global uploadThis
     try:
         while not done:
             # Check if user wants to send something by checking sendThis list.
@@ -108,6 +113,39 @@ def handleServer(server: socket.socket):
                 DriveInf.clear()
                 DriveInf.extend(json.loads(paths))
                 getDriveInf = False
+            elif uploading:
+                if uploadThis:
+                    req = 'u'.encode(enc)
+                    server.send(req)
+
+                    upPth = uploadThis.pop(0)
+                    fName = upPth.name.encode(enc)
+                    sze = str(len(fName)).ljust(hdrStrLen).encode(enc)
+                    server.send(sze)
+                    server.send(fName)
+                    fileSize = upPth.stat().st_size
+                    fileSizeHdr = str(fileSize).ljust(hdrStrLen).encode(enc)
+                    server.send(fileSizeHdr)
+                    Fm.prYellow(f'Uploading {fName}({fileSize} bytes):')
+                    with open(str(upPth), 'rb') as driveFile:
+                        byte = driveFile.read(readChunkSize)
+                        server.send(byte)
+                        start = time()
+                        prev = Fm.downloadProg(0, fileSize, 0, 50, start)
+                        cnt = 0
+                        while byte:
+                            byte = driveFile.read(readChunkSize)
+                            server.send(byte)
+                            cnt += len(byte)
+                            prev = Fm.downloadProg(cnt, fileSize, prev, 50, start)
+                        else:
+                            prev = Fm.downloadProg(cnt, fileSize, prev, 50, start)
+                            print()
+
+                    upSuccess = server.recv(uniChrSz).decode()
+                    Fm.prGreen(f'Successfully uploaded {fName}')
+                    if not uploadThis:
+                        uploading = False
             elif downloading:
                 if downloadThis:
                     req = 'g'.encode(enc)
@@ -163,13 +201,13 @@ def handleServer(server: socket.socket):
                     Fm.prYellow(f'Downloading {fileSz} bytes:')
                     with open(newPth, 'wb') as file:
                         start = time()
-                        prev = Fm.downloadProg(0, fileSz, 0, 50,start)
+                        prev = Fm.downloadProg(0, fileSz, 0, 50, start)
                         cnt = 0
                         while cnt < fileSz:
                             chunk = server.recv(writeChunkSize)
                             file.write(chunk)
                             cnt += len(chunk)
-                            prev = Fm.downloadProg(cnt, fileSz, prev, 50,start)
+                            prev = Fm.downloadProg(cnt, fileSz, prev, 50, start)
                     print('\n')
                     server.send('D'.encode(enc))
                     Fm.prGreen(f'File Downloaded at {newPth}!')
@@ -247,6 +285,8 @@ def handleClient():
     global getDriveInf
     global downloadThis
     global downloading
+    global uploading
+    global uploadThis
     intro = 'Potato Messenger 2.0'
     Fm.prYellow(intro.center(len(intro) + 4, " ").center(len(intro) + 91, Fm.potato()))
     print('\n' * 2)
@@ -276,7 +316,8 @@ def handleClient():
         r X->Read all messages between you and X.(X stands for another user's username)
         q->Quit
         drive->Get all files available for download.
-        download X->Download the Xth file in your Drive(use drive to see file Serial numbers)""")
+        download X->Download the Xth file in your Drive(use drive to see file Serial numbers)
+        upload X->Upload the file at location X to your drive. Right Click a file, then select properties where you can find the location""")
         Fm.prPurple('>', end='')
         user = input()
         if user.lower() == 'q':
@@ -380,7 +421,20 @@ def handleClient():
             while getDriveInf:
                 pass
             FilePrinter(DriveInf)
+        elif user.lower()[:7] == 'upload ':
+            pth = Path(user[7:])
+            if not pth.exists():
+                Fm.prRed('The given path does not exist.')
+                continue
+            uploadThis.append(pth)
+            uploading = True
+            while uploading:
+                pass
+
         elif user.lower()[:9] == 'download ':
+            getDriveInf = True
+            while getDriveInf:
+                pass
             num = int(user.lower()[9:].strip())
             index = num - 1
             if not 0 <= index < len(DriveInf):

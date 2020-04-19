@@ -22,6 +22,7 @@ Server Side:
             8.3)Receive 64 byte fixed length header giving size of file.
             8.4)Create a file under dir with name that of the alias and the filename as provided.
             8.5)Receive fileChunk byte by byte and write it in file.
+            8.6)Send Success message 'S'.
             8.6)Add new FilePath to driveInf dict as key and set value as a list containing user alias only and a string containing ctime().
         9)If request is 'd':
             9.1)Create list of all filePaths(Relative) that the user has access to.
