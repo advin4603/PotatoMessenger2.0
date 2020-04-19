@@ -27,7 +27,7 @@ enc = 'utf-8'
 bufferSize = 64
 uniChrSz = 1
 timeOut = 60  # in Seconds
-readBufferSize = 1024*4
+readBufferSize = 1024 * 128
 
 # Message Dictionary
 # * implies msg to all
@@ -43,7 +43,9 @@ msg: Dict[Tuple[str, str, str], Tuple[str, bool]] = {
 # Key is a path to a specific file in drive
 # Value is a tuple of authorized users and time last modified.
 driveInf: Dict[Path, Tuple[List[str], str]] = {
-    Path('Drive/admin/Welcome.txt'): (['*'], 'Fri Apr 17 22:16:37 2020')
+    Path('Drive/admin/Welcome.txt'): (['*'], 'Fri Apr 17 22:16:37 2020'),
+    Path('Drive/admin/download.jpg'): (['*'], 'Fri Apr 17 22:16:37 2020'),
+    Path('Drive/admin/100MB.bin'): (['*'], 'Fri Apr 17 22:16:37 2020')
 }
 sOpen = False
 
@@ -181,8 +183,8 @@ def handleConnection(client: socket.socket, address):
                 fileName = ''
                 for _ in range(sze):
                     fileName += client.recv(1).decode(enc)
-                if not os.path.exists(str(Path('Drive', 'admin'))):
-                    os.makedirs(str(Path('Drive', 'admin')))
+                if not os.path.exists(str(Path('Drive', alias))):
+                    os.makedirs(str(Path('Drive', alias)))
                 fileSze = int(client.recv(hdrbyteSize).decode(enc).strip())
                 filePath = Path('Drive', alias, fileName)
                 with open(str(filePath), 'wb') as File:
@@ -220,16 +222,18 @@ def handleConnection(client: socket.socket, address):
                     client.send('S'.encode(enc))
                     fPath = Path(filePath)
                     if fPath.exists():
-                        client.send('T'.encode(enc))
+                        client.send('Y'.encode(enc))
                         fileSize = fPath.stat().st_size
                         fileSizeHdr = str(fileSize).ljust(hdrStrLen).encode(enc)
                         client.send(fileSizeHdr)
-                        with open(filePath,'rb') as driveFile:
+                        with open(filePath, 'rb') as driveFile:
                             byte = driveFile.read(readBufferSize)
                             client.send(byte)
                             while byte:
                                 byte = driveFile.read(readBufferSize)
                                 client.send(byte)
+                        user = client.recv(uniChrSz).decode()
+                        Fm.prCyan(f'{lgSt()} {alias} downloaded {filePath}')
                     else:
                         client.send('N'.encode(enc))
                 else:

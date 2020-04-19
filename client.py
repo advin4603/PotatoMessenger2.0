@@ -1,12 +1,14 @@
 import socket
 import threading
-from time import ctime
+from time import ctime, time
 from typing import List, Tuple, Dict
 import sys
 import Formatting as Fm
 import traceback
 from platform import system
 import os
+import json
+from pathlib import Path
 
 # This if statement is for enabling colored statements in terminal and python console.
 if "win" in system().lower():  # works for Win7, 8, 10 ...
@@ -21,9 +23,17 @@ if "win" in system().lower():  # works for Win7, 8, 10 ...
 #     }
 # ]
 sendThis: List[Dict[Tuple[str, str, str], Tuple[str, bool]]] = []
+myFiles: List[str] = []
+giveAccess: List[Dict[str, str]] = []
+getDriveInf: bool = False
+DriveInf: List[str] = []
+downloadThis: List[str] = []
+downloading: bool = True
+posResp = ['yes', 'y', 'yeah', 'yup']
+negResp = ['no', 'n', 'nope', 'nah']
 # Message Dictionary
 # * implies msg to all
-# key tuple consists of sender's alias, reciever's alias and time sent
+# key tuple consists of sender's alias, receiver's alias and time sent
 # value tuple consists of msg and bool for if it is read.
 myMsg: Dict[Tuple[str, str, str], Tuple[str, bool]] = {}
 done = False
@@ -31,6 +41,7 @@ status: List[bool] = []
 # Change these sizes if using other encoding.
 hdrStrLen = 64
 hdrbyteSize = 64
+writeChunkSize = 1024 * 128
 
 ServerIP = socket.gethostbyname(socket.gethostname())
 port = 1234
@@ -41,12 +52,30 @@ uniChrSz = 1
 timeOut = 60  # in Seconds
 
 
+def FilePrinter(dInf: List[str]):
+    w1 = 11
+    w2 = 40
+    w3 = 80
+    pad = '-'
+    header = '||' + 'S.No.'.center(w1, pad) + '|' + 'FileName'.center(w2, pad) + '|' + 'FilePath'.center(80, pad) + '||'
+    Fm.prLightPurple(header)
+    for index, pth in enumerate(DriveInf):
+        ptObj = Path(pth)
+        row = '||' + str(index + 1).center(w1, pad) + '|' + str(ptObj.name).center(w2, pad) + '|' + str(ptObj).center(
+            w3, pad) + '||'
+        Fm.prCyan(row)
+
+
 def handleServer(server: socket.socket):
     """Thread to Send Handle Server. Sending Requests,quit msgs,and receive and send requests"""
     global myMsg
     global sendThis
     global status
     global done
+    global getDriveInf
+    global DriveInf
+    global downloading
+    global downloadThis
     try:
         while not done:
             # Check if user wants to send something by checking sendThis list.
@@ -69,6 +98,84 @@ def handleServer(server: socket.socket):
                 st = server.recv(uniChrSz).decode(enc)
                 state = True if st == 'S' else False
                 status.append(state)
+            elif getDriveInf:
+                req = 'd'.encode(enc)
+                server.send(req)
+                sz = int(server.recv(hdrbyteSize).decode(enc).strip())
+                paths = ''
+                for _ in range(sz):
+                    paths += server.recv(1).decode(enc)
+                DriveInf.clear()
+                DriveInf.extend(json.loads(paths))
+                getDriveInf = False
+            elif downloading:
+                if downloadThis:
+                    req = 'g'.encode(enc)
+                    server.send(req)
+                    pth = downloadThis.pop(-1)
+                    pthByte = pth.encode(enc)
+                    sz = str(len(pthByte)).ljust(hdrStrLen).encode(enc)
+                    server.send(sz)
+                    server.send(pthByte)
+                    Fm.prYellow('Asking for access..')
+                    access = server.recv(uniChrSz).decode(enc)
+                    if access != 'S':
+                        Fm.prRed(f'You don\'t have access to {pth}.\nDownload Failed!')
+                        downloading = False
+                        continue
+                    Fm.prGreen('Access Granted!')
+                    fileExists = server.recv(uniChrSz).decode(enc)
+                    Fm.prYellow('Checking if file exists on the server.')
+                    if fileExists != 'Y':
+                        Fm.prRed(f'The file at {pth} does not exist.')
+                        downloading = False
+                        continue
+                    Fm.prGreen('File found!')
+                    Fm.prCyan('Starting Download..')
+                    pthObj = Path(pth)
+                    newPth = Path('Downloads', pthObj.name)
+                    if not os.path.exists('Downloads'):
+                        os.makedirs('Downloads')
+                    else:
+                        if newPth.exists():
+                            Fm.prYellow('File already exists, Overwrite?(Yes or No)')
+                            Fm.prPurple('>', end='')
+                            overwrite = input()
+                            print()
+                            while True:
+                                if overwrite.lower() in negResp:
+                                    Fm.prPurple('Enter new file name(Without file extension)\n>', end='')
+                                    newName = input()
+                                    print()
+                                    newPth = Path('Downloads', newName + newPth.suffix)
+                                    break
+                                elif overwrite.lower() in posResp:
+                                    Fm.prLightPurple('Overwriting...')
+                                    print()
+                                    break
+                                else:
+                                    Fm.prRed('I didn\'t get that.')
+                                    Fm.prYellow('File already exists, Overwrite?(Yes or No)')
+                                    Fm.prPurple('>', end='')
+                                    overwrite = input()
+                                    print()
+                    fileSz = int(server.recv(hdrbyteSize).decode(enc).strip())
+                    Fm.prYellow(f'Downloading {fileSz} bytes:')
+                    with open(newPth, 'wb') as file:
+                        start = time()
+                        prev = Fm.downloadProg(0, fileSz, 0, 50,start)
+                        cnt = 0
+                        while cnt < fileSz:
+                            chunk = server.recv(writeChunkSize)
+                            file.write(chunk)
+                            cnt += len(chunk)
+                            prev = Fm.downloadProg(cnt, fileSz, prev, 50,start)
+                    print('\n')
+                    server.send('D'.encode(enc))
+                    Fm.prGreen(f'File Downloaded at {newPth}!')
+                    downloading = False
+                else:
+                    downloading = False
             else:
                 # If no messages to be sent then send read request to get latest messages.
                 req = 'r'.encode(enc)
@@ -93,7 +200,10 @@ def handleServer(server: socket.socket):
     except ConnectionError:
         Fm.prRed('The Server closed the connection.')
         Fm.prCyan('Quitting...')
-
+    except BaseException as exc:
+        with open('Traceback.txt', 'w') as f:
+            Fm.prRed('Some unknown error occurred during connection with server. View traceback.txt for details.')
+            print(traceback.format_exc(), file=f)
     finally:
         server.close()
         os._exit(0)
@@ -134,6 +244,9 @@ def viewPrinter(myMsg, alias: str):
 def handleClient():
     global done
     global status
+    global getDriveInf
+    global downloadThis
+    global downloading
     intro = 'Potato Messenger 2.0'
     Fm.prYellow(intro.center(len(intro) + 4, " ").center(len(intro) + 91, Fm.potato()))
     print('\n' * 2)
@@ -161,7 +274,9 @@ def handleClient():
         s->Send a msg
         r->Read your inbox
         r X->Read all messages between you and X.(X stands for another user's username)
-        q->Quit""")
+        q->Quit
+        drive->Get all files available for download.
+        download X->Download the Xth file in your Drive(use drive to see file Serial numbers)""")
         Fm.prPurple('>', end='')
         user = input()
         if user.lower() == 'q':
@@ -230,7 +345,7 @@ def handleClient():
                 print()
                 Fm.prYellow(f'Confirm message to {recipients}(Yes or No)\n>', end='')
                 ch = input()
-                if ch.lower() in ['yes', 'y', 'yeah', 'yup']:
+                if ch.lower() in posResp:
                     sendThis.append(send)
                     print()
                     Fm.prYellow('Sending...')
@@ -246,16 +361,43 @@ def handleClient():
                             while repeat:
                                 Fm.prYellow('Send Again(Yes or No)\n>', end='')
                                 again = input()
-                                if again.lower() in ['yes', 'y', 'yeah', 'yup']:
+                                if again.lower() in posResp:
                                     break
-                                elif again.lower() in ['no', 'n', 'nope', 'nah']:
+                                elif again.lower() in negResp:
                                     repeat = False
                                 else:
                                     Fm.prRed("I didn't understand that.")
                                     print()
                             else:
                                 break
-                elif ch.lower() in ['no', 'n', 'nope', 'nah']:
+                elif ch.lower() in negResp:
+                    break
+                else:
+                    Fm.prRed("I didn't understand that.")
+        elif user.lower() in 'drive':
+            getDriveInf = True
+            Fm.prYellow('Getting info...')
+            while getDriveInf:
+                pass
+            FilePrinter(DriveInf)
+        elif user.lower()[:9] == 'download ':
+            num = int(user.lower()[9:].strip())
+            index = num - 1
+            if not 0 <= index < len(DriveInf):
+                Fm.prRed(f'There is no file with serial {num}.')
+                continue
+            while True:
+                Fm.prYellow(f'Download {Path(DriveInf[index]).name}?')
+                Fm.prPurple('>', end='')
+                user = input()
+                if user.lower() in posResp:
+                    print('\n')
+                    downloadThis.append(DriveInf[index])
+                    downloading = True
+                    while downloading:
+                        pass
+                    break
+                elif user.lower() in negResp:
                     break
                 else:
                     Fm.prRed("I didn't understand that.")
