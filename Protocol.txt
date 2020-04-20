@@ -32,7 +32,7 @@ Server Side:
             10.1)Receive 64 byte header giving size of coming update.
             10.2)Prepare to receive the update dict.
             10.3)Receive the update dict.
-            10.4)If valid update the dictionary, then sending S for success else F.
+            10.4)If valid update the dictionary, then send S for success else F.
         11)If request is 'g':
             11.1)Receive a 64 byte header giving size of filePath.
             11.2)Receive the filePath.

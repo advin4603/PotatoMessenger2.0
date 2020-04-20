@@ -33,6 +33,8 @@ uploadThis: List[Path] = []
 uploading: bool = False
 posResp = ['yes', 'y', 'yeah', 'yup']
 negResp = ['no', 'n', 'nope', 'nah']
+shareThis:List[Dict[str,Path]] = []
+sharing = True
 # Message Dictionary
 # * implies msg to all
 # key tuple consists of sender's alias, receiver's alias and time sent
@@ -81,6 +83,8 @@ def handleServer(server: socket.socket):
     global downloadThis
     global uploading
     global uploadThis
+    global shareThis
+    global sharing
     try:
         while not done:
             # Check if user wants to send something by checking sendThis list.
@@ -113,6 +117,25 @@ def handleServer(server: socket.socket):
                 DriveInf.clear()
                 DriveInf.extend(json.loads(paths))
                 getDriveInf = False
+            elif sharing:
+                if shareThis:
+                    upd = shareThis.pop(-1)
+                    updFormatted:Dict[str,str] = {}
+                    for user in upd:
+                        updFormatted[user] = str(upd[user])
+                    server.send('l'.encode(enc))
+                    share = json.dumps(updFormatted).encode(enc)
+                    sz = str(len(share)).ljust(hdrStrLen).encode(enc)
+                    server.send(sz)
+                    server.send(share)
+                    success = server.recv(uniChrSz).decode(enc)
+                    print(success)
+                    if success == 'S':
+                        Fm.prGreen('Successfully shared files.')
+                    else:
+                        Fm.prRed('Sharing Failed!')
+                else:
+                    sharing = False
             elif uploading:
                 if uploadThis:
                     req = 'u'.encode(enc)
@@ -146,6 +169,8 @@ def handleServer(server: socket.socket):
                     Fm.prGreen(f'Successfully uploaded {fName}')
                     if not uploadThis:
                         uploading = False
+                else:
+                    uploading = False
             elif downloading:
                 if downloadThis:
                     req = 'g'.encode(enc)
@@ -287,6 +312,8 @@ def handleClient():
     global downloading
     global uploading
     global uploadThis
+    global shareThis
+    global sharing
     intro = 'Potato Messenger 2.0'
     Fm.prYellow(intro.center(len(intro) + 4, " ").center(len(intro) + 91, Fm.potato()))
     print('\n' * 2)
@@ -319,7 +346,9 @@ def handleClient():
         download X->Download the Xth file in your Drive(use drive to see file Serial numbers)
         upload X->Upload the file at location X to your drive. 
                   Right Click a file, then select properties where you can find the location.
-                  Add fileName to the location.:LOCATION\\filename.extension(Ex:F:\\Pycharm_projects\\PotatoMessenger2.0)
+                  Add fileName to the location.:LOCATION\\filename.extension
+                  (Ex:F:\\Pycharm_projects\\PotatoMessenger2.0\\client.py)
+        share X->Share the Xth file in your Drive(use drive to see file Serial numbers)
                   """)
         Fm.prPurple('>', end='')
         user = input()
@@ -429,11 +458,74 @@ def handleClient():
             if not pth.exists():
                 Fm.prRed('The given path does not exist.')
                 continue
+            if pth.is_dir():
+                Fm.prRed('You cannot upload a folder.(Try compressing it)')
+                continue
             uploadThis.append(pth)
             uploading = True
             while uploading:
                 pass
-
+        elif user.lower()[:6] == 'share ':
+            getDriveInf = True
+            while getDriveInf:
+                pass
+            num = int(user.lower()[6:].strip())
+            index = num - 1
+            if not 0 <= index < len(DriveInf):
+                Fm.prRed(f'There is no file with serial {num}.')
+                continue
+            while 1:
+                share = Path(DriveInf[index])
+                Fm.prYellow(f'Share {share.name}?')
+                Fm.prPurple('>', end='')
+                user = input()
+                if user.lower() in posResp:
+                    print('\n')
+                    Fm.prPurple('Enter Recipient 1(Enter * to share file with everyone using Potato Messenger)\n>', end='')
+                    r = [input()]
+                    while r[0] == '':
+                        print()
+                        Fm.prPurple('Enter Recipient 1\n>', end='')
+                        r = [input()]
+                    i = 2
+                    if r[0] != '*':
+                        while True:
+                            Fm.prPurple(f'Enter Recipient {i}(To continue press enter without typing anything)\n>',
+                                        end='')
+                            rec = input()
+                            if rec == '':
+                                break
+                            else:
+                                r.append(rec)
+                                i += 1
+                    if '*' in r:
+                        shareReq:Dict[str,Path] = {'*':share}
+                        recipients = 'Everyone using Potato Messenger.'
+                    else:
+                        shareReq:Dict[str,Path] = {}
+                        for recipient in r:
+                            shareReq[recipient] = share
+                        recipients = ', '.join(r[:-1]) + f', and {r[-1]}' if len(r) != 1 else r[0]
+                    Fm.prYellow(f'Confirm file share with {recipients}(Yes or No)\n>', end='')
+                    while 1:
+                        ch = input()
+                        if ch.lower() in posResp:
+                            shareThis.append(shareReq)
+                            print()
+                            Fm.prYellow('Sharing...')
+                            sharing = True
+                            while sharing:
+                                pass
+                            break
+                        elif ch.lower() in negResp:
+                            break
+                        else:
+                            Fm.prRed("I didn't understand that.")
+                    break
+                elif user.lower() in negResp:
+                    break
+                else:
+                    Fm.prRed("I didn't understand that.")
         elif user.lower()[:9] == 'download ':
             getDriveInf = True
             while getDriveInf:

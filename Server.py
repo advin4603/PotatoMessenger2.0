@@ -211,9 +211,9 @@ def handleConnection(client: socket.socket, address):
                 for _ in range(sz):
                     upDictJSON += client.recv(1).decode(enc)
                 upDict = json.loads(upDictJSON)
-                if letUpdateTypeCheck(upDictJSON):
+                if letUpdateTypeCheck(upDict):
                     for f in upDict:
-                        driveInf[f][0].append(upDict[f])
+                        driveInf[Path(upDict[f])][0].append(f)
                     client.send('S'.encode(enc))
                 else:
                     client.send('F'.encode(enc))
