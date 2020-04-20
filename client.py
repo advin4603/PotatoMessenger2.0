@@ -62,7 +62,7 @@ def FilePrinter(dInf: List[str]):
     pad = '-'
     header = '||' + 'S.No.'.center(w1, pad) + '|' + 'FileName'.center(w2, pad) + '|' + 'FilePath'.center(80, pad) + '||'
     Fm.prLightPurple(header)
-    for index, pth in enumerate(DriveInf):
+    for index, pth in enumerate(dInf):
         ptObj = Path(pth)
         row = '||' + str(index + 1).center(w1, pad) + '|' + str(ptObj.name).center(w2, pad) + '|' + str(ptObj).center(
             w3, pad) + '||'
@@ -139,10 +139,10 @@ def handleServer(server: socket.socket):
                             cnt += len(byte)
                             prev = Fm.downloadProg(cnt, fileSize, prev, 50, start)
                         else:
-                            prev = Fm.downloadProg(cnt, fileSize, prev, 50, start)
+                            _ = Fm.downloadProg(fileSize, fileSize, prev, 50, start)
                             print()
 
-                    upSuccess = server.recv(uniChrSz).decode()
+                    _ = server.recv(uniChrSz).decode()
                     Fm.prGreen(f'Successfully uploaded {fName}')
                     if not uploadThis:
                         uploading = False
@@ -238,7 +238,7 @@ def handleServer(server: socket.socket):
     except ConnectionError:
         Fm.prRed('The Server closed the connection.')
         Fm.prCyan('Quitting...')
-    except BaseException as exc:
+    except BaseException:
         with open('Traceback.txt', 'w') as f:
             Fm.prRed('Some unknown error occurred during connection with server. View traceback.txt for details.')
             print(traceback.format_exc(), file=f)
@@ -317,7 +317,10 @@ def handleClient():
         q->Quit
         drive->Get all files available for download.
         download X->Download the Xth file in your Drive(use drive to see file Serial numbers)
-        upload X->Upload the file at location X to your drive. Right Click a file, then select properties where you can find the location""")
+        upload X->Upload the file at location X to your drive. 
+                  Right Click a file, then select properties where you can find the location.
+                  Add fileName to the location.:LOCATION\\filename.extension(Ex:F:\\Pycharm_projects\\PotatoMessenger2.0)
+                  """)
         Fm.prPurple('>', end='')
         user = input()
         if user.lower() == 'q':
