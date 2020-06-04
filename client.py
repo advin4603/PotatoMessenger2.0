@@ -9,6 +9,13 @@ from platform import system
 import os
 import json
 from pathlib import Path
+try:
+    import pyautogui
+except ModuleNotFoundError:
+    pyInp = False
+else:
+    pyInp = True
+
 
 # This if statement is for enabling colored statements in terminal and python console.
 if "win" in system().lower():  # works for Win7, 8, 10 ...
@@ -33,7 +40,7 @@ uploadThis: List[Path] = []
 uploading: bool = False
 posResp = ['yes', 'y', 'yeah', 'yup']
 negResp = ['no', 'n', 'nope', 'nah']
-shareThis:List[Dict[str,Path]] = []
+shareThis: List[Dict[str, Path]] = []
 sharing = True
 # Message Dictionary
 # * implies msg to all
@@ -56,7 +63,7 @@ bufferSize = 64
 uniChrSz = 1
 timeOut = 60  # in Seconds
 
-
+# TODO Set Up Registration.
 def FilePrinter(dInf: List[str]):
     w1 = 11
     w2 = 40
@@ -120,7 +127,7 @@ def handleServer(server: socket.socket):
             elif sharing:
                 if shareThis:
                     upd = shareThis.pop(-1)
-                    updFormatted:Dict[str,str] = {}
+                    updFormatted: Dict[str, str] = {}
                     for user in upd:
                         updFormatted[user] = str(upd[user])
                     server.send('l'.encode(enc))
@@ -129,7 +136,6 @@ def handleServer(server: socket.socket):
                     server.send(sz)
                     server.send(share)
                     success = server.recv(uniChrSz).decode(enc)
-                    print(success)
                     if success == 'S':
                         Fm.prGreen('Successfully shared files.')
                     else:
@@ -319,6 +325,12 @@ def handleClient():
     print('\n' * 2)
     Fm.prPurple('Login as\n>', end='')
     alias = input('')
+    if pyInp:
+        password = pyautogui.password("Enter Password:", "Password")
+    else:
+        Fm.prPurple('Password\n>', end='')
+        password = input('')
+
     try:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.connect((socket.gethostbyname(socket.gethostname()), 1234))
@@ -333,6 +345,15 @@ def handleClient():
     aliasHeader = bytes(str(aliasSz).ljust(hdrStrLen), enc)
     server.send(aliasHeader)
     server.send(aliasByte)
+    passwordByte = password.encode(enc)
+    passwordSz = str(len(passwordByte)).ljust(hdrStrLen).encode(enc)
+    server.send(passwordSz)
+    server.send(passwordByte)
+    resp = server.recv(1).decode(enc)
+    if resp == "F":
+        Fm.prRed(f"Username/Password is wrong")
+        server.close()
+        return
     Fm.prGreen(f'Successfully Logged in as {alias}')
     handler = threading.Thread(target=lambda: handleServer(server))
     handler.start()
@@ -352,6 +373,8 @@ def handleClient():
                   """)
         Fm.prPurple('>', end='')
         user = input()
+        if user == '':
+            continue
         if user.lower() == 'q':
             Fm.prCyan('Quitting...')
             done = True
@@ -481,7 +504,8 @@ def handleClient():
                 user = input()
                 if user.lower() in posResp:
                     print('\n')
-                    Fm.prPurple('Enter Recipient 1(Enter * to share file with everyone using Potato Messenger)\n>', end='')
+                    Fm.prPurple('Enter Recipient 1(Enter * to share file with everyone using Potato Messenger)\n>',
+                                end='')
                     r = [input()]
                     while r[0] == '':
                         print()
@@ -499,10 +523,10 @@ def handleClient():
                                 r.append(rec)
                                 i += 1
                     if '*' in r:
-                        shareReq:Dict[str,Path] = {'*':share}
+                        shareReq: Dict[str, Path] = {'*': share}
                         recipients = 'Everyone using Potato Messenger.'
                     else:
-                        shareReq:Dict[str,Path] = {}
+                        shareReq: Dict[str, Path] = {}
                         for recipient in r:
                             shareReq[recipient] = share
                         recipients = ', '.join(r[:-1]) + f', and {r[-1]}' if len(r) != 1 else r[0]
@@ -560,3 +584,4 @@ def handleClient():
 
 handleClient()
 Fm.prGreen('Successfully quit.')
+"""01101000011101000111010001110000011100110011101000101111001011110111011101110111011101110010111001111001011011110111010101110100011101010110001001100101001011100110001101101111011011010010111101110111011000010111010001100011011010000011111101110110001111010110010001010001011101110011010001110111001110010101011101100111010110000110001101010001"""

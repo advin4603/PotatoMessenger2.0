@@ -3,6 +3,8 @@ Server Side:
         1)Receive 16 byte fixed length header giving size of alias msg.
         2)Prepare to receive all bytes one at a time.
         3)Receive the alias.
+            3.1)Similarly receive the hashed password and compare to user data.
+            3.2)If not authenticated send "F" else "S".
         4)Receive request from client
         5)If request is 'r':
             5.1)Create client's view of all msg.

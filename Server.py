@@ -9,6 +9,7 @@ from platform import system
 from copy import deepcopy
 from pathlib import Path
 import json
+from hashlib import blake2b
 
 # This if statement is for enabling colored statements in terminal and python console.
 if "win" in system().lower():  # works for Win7, 8, 10 ...
@@ -20,7 +21,9 @@ if "win" in system().lower():  # works for Win7, 8, 10 ...
 hdrStrLen = 64
 hdrbyteSize = 64
 
+rgConnected = True
 myIP = socket.gethostbyname(socket.gethostname())
+registrationServerIP = socket.gethostbyname(socket.gethostname())
 port = 1234
 queueLength = 5
 enc = 'utf-8'
@@ -38,6 +41,46 @@ msg: Dict[Tuple[str, str, str], Tuple[str, bool]] = {
     ('admin', '*', 'Sat Apr 11 22:10:30 2020'): ('Welcome to Potato Messenger', True),
     ('Potato', 'Tomato', 'Sat Apr 11 22:10:30 2020'): ('How you doin\'?', False)
 }
+
+# Users Database
+# Contains users and blake2b hashed passwords.
+users: Dict[str, bytes] = {
+    "admin": b"\x87g[\xa38\xb1\x1c\xb7\x83\xc7\xb6\xbf\xc2r@\xa6\x1f\x0c\xc4\xaa~\xe80Z'\x96\x89\x8e\x8f\x8f\xae\xd8"
+             b"\x8en d\x93\x00\\\xe9V\xb7\xd2\\\xb0\xcf\xc8Y\x1dL\xb4\x0e\xac\xd3O\x0b\xe8*\xdfnlc\x16\xd8"}
+
+registrationKeyHashed = b"\x08z'uJ3\xc7 \xb6\x0b\x9b\xc5\xc7\xa9\xc50\xd3Tl\xa2\xba\xac\xcd\x07\xcf\xd4\xea\xf2\x87" \
+                        b"\x08L8e" \
+                        b"\x8e\xbd\xca1\xd6\xa4\x92(\xbb*6(\x82\xc1\x10\xea\x01#I\xc9\xf5+\x8a+\x88\xaf\x10\xd4\xf5" \
+                        b"\xd8\xdc "
+
+
+def registrationHandler(reg: socket.socket, address):
+    global rgConnected
+    global sOpen
+    global users
+    keySize = int(reg.recv(hdrbyteSize).decode(enc).strip())
+    hashKey = blake2b()
+    rgConnected = True
+    for _ in range(keySize):
+        hashKey.update(reg.recv(1))
+    if hashKey != registrationKeyHashed:
+        reg.send("F".encode(enc))
+        rgConnected = False
+        return
+    reg.send("S".encode(enc))
+
+    try:
+        while 1:
+            updateSize = int(reg.recv(hdrbyteSize).decode(enc).strip())
+            updateJSON = ""
+            for _ in range(updateSize):
+                updateJSON += reg.recv(1).decode(enc)
+            update = json.loads(updateJSON)
+            users.update(update)
+    except Exception as error:
+        Fm.prRed(f'{lgSt("DISCONNECT")} {address} was disconnected due to an error. {error}')
+        reg.close()
+
 
 # Drive Info Dictionary.
 # * implies all have access.
@@ -139,6 +182,17 @@ def handleConnection(client: socket.socket, address):
         lastActive = time()
         for _ in range(aliasSize):
             alias += client.recv(1).decode(enc)
+        passwordSize = int(client.recv(hdrbyteSize).decode(enc).strip())
+        passwordHash = blake2b()
+        lastActive = time()
+        for _ in range(passwordSize):
+            passwordHash.update(client.recv(1))
+        if users[alias] != passwordHash.digest():
+            client.send("F".encode(enc))
+            client.close()
+            return
+        client.send("S".encode(enc))
+
         Fm.prCyan(f'{lgSt("CONNECTION")} {alias} connected to the server')
         # Receive loop.
         done = False
@@ -310,10 +364,15 @@ def threadMaker(s: socket.socket):
         while True:
             if sOpen:
                 client, address = s.accept()
-                sktHandler = handleMaker(client, address)
-                handleThread = threading.Thread(target=sktHandler)
-                handlers.append(handleThread)
-                handleThread.start()
+                if not rgConnected and address[0] == registrationServerIP:
+                    rgHandlerThread = threading.Thread(target=lambda: registrationHandler(client, address))
+                    handlers.append(rgHandlerThread)
+                    rgHandlerThread.start()
+                else:
+                    sktHandler = handleMaker(client, address)
+                    handleThread = threading.Thread(target=sktHandler)
+                    handlers.append(handleThread)
+                    handleThread.start()
             else:
                 break
     except OSError:
